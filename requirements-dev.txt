@@ -1,0 +1,4 @@
+build>=1.2,<2
+pytest>=8,<9
+PyYAML>=6,<7
+

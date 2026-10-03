@@ -1,0 +1,110 @@
+resources:
+  jobs:
+    sales_lakeflow_job:
+      name: "[${bundle.target}] Sales Lakeflow Job"
+      description: "Serverless raw-to-silver-to-gold sales processing."
+      max_concurrent_runs: 1
+      timeout_seconds: 10800
+      queue:
+        enabled: true
+      schedule:
+        quartz_cron_expression: "0 0 6 * * ?"
+        timezone_id: Australia/Sydney
+        pause_status: ${var.schedule_pause_status}
+      trigger:
+        pause_status: ${var.file_arrival_pause_status}
+        file_arrival:
+          url: ${var.external_source_path}
+          min_time_between_triggers_seconds: ${var.file_arrival_min_time_between_triggers_seconds}
+          wait_after_last_change_seconds: ${var.file_arrival_wait_after_last_change_seconds}
+      email_notifications:
+        on_failure:
+          - ${var.notification_email}
+      notification_settings:
+        no_alert_for_skipped_runs: true
+        no_alert_for_canceled_runs: true
+      parameters:
+        - name: catalog_name
+          default: ${var.catalog_name}
+        - name: raw_schema_name
+          default: ${var.raw_schema_name}
+        - name: silver_schema_name
+          default: ${var.silver_schema_name}
+        - name: gold_schema_name
+          default: ${var.gold_schema_name}
+        - name: source_path
+          default: ${var.source_path}
+        - name: external_source_path
+          default: ${var.external_source_path}
+        - name: input_source_type
+          default: ${var.input_source_type}
+        - name: input_format
+          default: ${var.input_format}
+        - name: csv_header
+          default: ${var.csv_header}
+        - name: csv_delimiter
+          default: ${var.csv_delimiter}
+        - name: csv_column_names
+          default: ${var.csv_column_names}
+        - name: sales_business_keys
+          default: ${var.sales_business_keys}
+      environments:
+        - environment_key: sales_environment
+          spec:
+            client: "4"
+            dependencies:
+              - ../dist/*.whl
+      tasks:
+        - task_key: sales_raw
+          environment_key: sales_environment
+          max_retries: 2
+          min_retry_interval_millis: 60000
+          retry_on_timeout: true
+          timeout_seconds: 3600
+          notebook_task:
+            notebook_path: ../src/notebooks/sales_raw.py
+            source: WORKSPACE
+            base_parameters:
+              catalog_name: "{{job.parameters.catalog_name}}"
+              raw_schema_name: "{{job.parameters.raw_schema_name}}"
+              source_path: "{{job.parameters.source_path}}"
+              external_source_path: "{{job.parameters.external_source_path}}"
+              input_source_type: "{{job.parameters.input_source_type}}"
+              input_format: "{{job.parameters.input_format}}"
+              csv_header: "{{job.parameters.csv_header}}"
+              csv_delimiter: "{{job.parameters.csv_delimiter}}"
+              csv_column_names: "{{job.parameters.csv_column_names}}"
+              sales_business_keys: "{{job.parameters.sales_business_keys}}"
+        - task_key: sales_silver
+          environment_key: sales_environment
+          depends_on:
+            - task_key: sales_raw
+          run_if: ALL_SUCCESS
+          max_retries: 2
+          min_retry_interval_millis: 60000
+          retry_on_timeout: true
+          timeout_seconds: 3600
+          notebook_task:
+            notebook_path: ../src/notebooks/sales_silver.py
+            source: WORKSPACE
+            base_parameters:
+              catalog_name: "{{job.parameters.catalog_name}}"
+              raw_schema_name: "{{job.parameters.raw_schema_name}}"
+              silver_schema_name: "{{job.parameters.silver_schema_name}}"
+              sales_business_keys: "{{job.parameters.sales_business_keys}}"
+        - task_key: sales_gold
+          environment_key: sales_environment
+          depends_on:
+            - task_key: sales_silver
+          run_if: ALL_SUCCESS
+          max_retries: 2
+          min_retry_interval_millis: 60000
+          retry_on_timeout: true
+          timeout_seconds: 3600
+          notebook_task:
+            notebook_path: ../src/notebooks/sales_gold.py
+            source: WORKSPACE
+            base_parameters:
+              catalog_name: "{{job.parameters.catalog_name}}"
+              silver_schema_name: "{{job.parameters.silver_schema_name}}"
+              gold_schema_name: "{{job.parameters.gold_schema_name}}"

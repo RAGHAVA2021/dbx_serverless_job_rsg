@@ -1,0 +1,2 @@
+"""Reusable sales-pipeline logic."""
+

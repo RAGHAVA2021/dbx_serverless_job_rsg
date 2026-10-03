@@ -1,0 +1,81 @@
+bundle:
+  name: sales-lakeflow-job
+
+include:
+  - resources/*.yml
+
+artifacts:
+  default:
+    type: whl
+    build: python -m build --wheel
+    path: .
+
+variables:
+  catalog_name:
+    description: Existing Unity Catalog catalog containing the sales schemas.
+    default: <catalog-name>
+  raw_schema_name:
+    description: Existing schema for raw Delta tables.
+    default: <raw-schema-name>
+  silver_schema_name:
+    description: Existing schema for validated Delta tables.
+    default: <silver-schema-name>
+  gold_schema_name:
+    description: Existing schema for business-facing Delta tables.
+    default: <gold-schema-name>
+  volume_schema_name:
+    description: Existing schema containing the source volume.
+    default: <volume-schema-name>
+  volume_name:
+    description: Existing Unity Catalog Volume containing sales files.
+    default: <volume-name>
+  input_source_type:
+    description: Input storage mode. Allowed values are volume or external_location.
+    default: volume
+  input_format:
+    description: Input file format. Allowed values are csv or parquet.
+    default: parquet
+  source_path:
+    description: Serverless-readable Unity Catalog Volume directory.
+    default: /Volumes/${var.catalog_name}/${var.volume_schema_name}/${var.volume_name}/sales/
+  external_source_path:
+    description: Azure ABFSS directory governed by a Unity Catalog external location.
+    default: abfss://<container>@<storage-account>.dfs.core.windows.net/<external-location-prefix>/sales/
+  csv_header:
+    description: Whether CSV input contains a header row (true or false).
+    default: "true"
+  csv_delimiter:
+    description: Single-character CSV delimiter.
+    default: ","
+  csv_column_names:
+    description: Ordered comma-separated column names used when csv_header is false.
+    default: sales_id,product_id,quantity,unit_price,sale_timestamp,updated_at,currency
+  sales_business_keys:
+    description: Comma-separated columns forming the sales MERGE key.
+    default: sales_id
+  notification_email:
+    description: Failure notification recipient; replace before deployment.
+    default: <notification-email>
+  schedule_pause_status:
+    description: PAUSED by default. Set explicitly to UNPAUSED for a scheduled production deployment.
+    default: PAUSED
+  file_arrival_pause_status:
+    description: PAUSED by default. Set to UNPAUSED to trigger when files change under external_source_path.
+    default: PAUSED
+  file_arrival_min_time_between_triggers_seconds:
+    description: Minimum time between file-arrival-triggered job runs.
+    default: 60
+  file_arrival_wait_after_last_change_seconds:
+    description: Quiet period after the last detected file change before starting a run.
+    default: 30
+
+targets:
+  dev:
+    default: true
+    mode: development
+    variables:
+      schedule_pause_status: PAUSED
+      file_arrival_pause_status: PAUSED
+
+  prod:
+    mode: production
